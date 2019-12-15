@@ -3,7 +3,7 @@ package p2pb2b
 import (
 	"bytes"
 	"crypto/hmac"
-	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -76,11 +76,12 @@ func (c *client) sendPost(url string, additionalHeaders map[string]string, body 
 	if additionalHeaders == nil {
 		additionalHeaders = make(map[string]string)
 	}
-	additionalHeaders[HeaderXTxcPayloard] = base64.StdEncoding.EncodeToString(bodyBytes)
+	bodyBase64 := base64.StdEncoding.EncodeToString(bodyBytes)
+	additionalHeaders[HeaderXTxcPayloard] = bodyBase64
 
 	if c.auth != nil {
-		h := hmac.New(sha256.New, []byte(c.auth.APISecret))
-		h.Write(bodyBytes)
+		h := hmac.New(sha512.New, []byte(c.auth.APISecret))
+		h.Write([]byte(bodyBase64))
 		signature := hex.EncodeToString(h.Sum(nil))
 		additionalHeaders[HeaderXTxcSignature] = signature
 	}
@@ -105,7 +106,7 @@ func (c *client) sendRequest(request *http.Request, additionalHeaders map[string
 	}
 
 	thisHeaders := map[string]string{}
-	thisHeaders["Content-type"] = "application/json"
+	thisHeaders["Content-Type"] = "application/json"
 	if c.auth != nil {
 		thisHeaders[HeaderXTxcAPIKey] = c.auth.APIKey
 	}
@@ -113,9 +114,9 @@ func (c *client) sendRequest(request *http.Request, additionalHeaders map[string
 	for k, v := range headers {
 		request.Header.Add(k, v)
 	}
+
 	resp, err := c.http.Do(request)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("erro: %v", err))
 		return nil, err
 	}
 	return &response{

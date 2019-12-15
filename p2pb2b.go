@@ -8,7 +8,7 @@ import (
 )
 
 // baseAPI is the p2pb2b API endpoint
-const baseAPI = "https://api.p2pb2b.io/api/v1"
+const baseAPI = "https://api.p2pb2b.io"
 
 // for testing purposes only
 func newClientWithURL(url string, apiKey string, apiSecret string) (Client, error) {
@@ -57,9 +57,9 @@ type Response struct {
 }
 
 // Request is the basic http request struct
-type Request struct {
+type request struct {
 	Request string `json:"request"`
-	Nonce   string `json:"nonce"`
+	Nonce   int64  `json:"nonce"`
 }
 
 // TimestampToTime is a convenience function to convert a float64 timestamp to time.Time

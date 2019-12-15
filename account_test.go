@@ -1,6 +1,7 @@
 package p2pb2b
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -17,8 +18,8 @@ func TestPostBalancesNoKeyProvided(t *testing.T) {
 	pseudoAPISecret := "4a894c5c-8a7e-4337-bb6b-9fde16e3dddd"
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, r.Method, "POST")
-		assert.Equal(t, r.URL.String(), "/account/balances")
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/account/balances", r.URL.String())
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		w.WriteHeader(http.StatusInternalServerError)
@@ -30,12 +31,7 @@ func TestPostBalancesNoKeyProvided(t *testing.T) {
 	if err != nil {
 		t.Error(err.Error())
 	}
-	request := &AccountBalancesRequest{
-		Request: Request{
-			Request: "{{request}}",
-			Nonce:   "{{nonce}}",
-		},
-	}
+	request := &AccountBalancesRequest{}
 	_, err = client.PostBalances(request)
 	assert.True(t, err != nil)
 }
@@ -56,21 +52,21 @@ func TestPostBalances(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/account/balances", r.URL.String())
+		assert.Equal(t, "/api/v1/account/balances", r.URL.String())
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
-		assert.Equal(t, "eyJyZXF1ZXN0Ijoie3tyZXF1ZXN0fX0iLCJub25jZSI6Int7bm9uY2V9fSJ9", r.Header.Get("X-TXC-PAYLOAD"))
-		assert.Equal(t, "fc545d1ebb38029d0d339b7545ee6252ae9ea2af9689b1a970775c3b74d9326c", r.Header.Get("X-TXC-SIGNATURE"))
-
-		expectedReqBody := `{
-			"request": "{{request}}",
-			"nonce": "{{nonce}}"
-		}`
 		reqBody, _ := ioutil.ReadAll(r.Body)
-		equal, err := isEqualJSON(expectedReqBody, string(reqBody))
+		reqBody64 := base64.StdEncoding.EncodeToString(reqBody)
+
+		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
+		assert.Equal(t, reqBody64, r.Header.Get("X-TXC-PAYLOAD"))
+		assert.NotEmpty(t, r.Header.Get("X-TXC-SIGNATURE"))
+
+		var req AccountBalancesRequest
+		err := json.Unmarshal(reqBody, &req)
 		assert.Nil(t, err, err)
-		assert.True(t, equal, fmt.Sprintf("%s is not equal to %s", expectedReqBody, string(reqBody)))
+		assert.Equal(t, req.Request, "/api/v1/account/balances")
+		assert.NotEmpty(t, req.Nonce)
 
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(body))
@@ -81,12 +77,7 @@ func TestPostBalances(t *testing.T) {
 	if err != nil {
 		t.Error(err.Error())
 	}
-	request := &AccountBalancesRequest{
-		Request: Request{
-			Request: "{{request}}",
-			Nonce:   "{{nonce}}",
-		},
-	}
+	request := &AccountBalancesRequest{}
 	resp, err := client.PostBalances(request)
 
 	assert.NotNil(t, resp, fmt.Sprintf("error: %v", err))
@@ -102,8 +93,8 @@ func TestPostCurrencyBalanceNoKeyProvided(t *testing.T) {
 	pseudoAPISecret := "4a894c5c-8a7e-4337-bb6b-9fde16e3dddd"
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, r.Method, "POST")
-		assert.Equal(t, r.URL.String(), "/account/balance")
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/account/balance", r.URL.String())
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		w.WriteHeader(http.StatusInternalServerError)
@@ -116,10 +107,6 @@ func TestPostCurrencyBalanceNoKeyProvided(t *testing.T) {
 		t.Error(err.Error())
 	}
 	request := &AccountCurrencyBalanceRequest{
-		Request: Request{
-			Request: "{{request}}",
-			Nonce:   "{{nonce}}",
-		},
 		Currency: "ETH",
 	}
 	_, err = client.PostCurrencyBalance(request)
@@ -142,22 +129,23 @@ func TestPostCurrencyBalance(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/account/balance", r.URL.String())
+		assert.Equal(t, "/api/v1/account/balance", r.URL.String())
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
-		assert.Equal(t, "eyJyZXF1ZXN0Ijoie3tyZXF1ZXN0fX0iLCJub25jZSI6Int7bm9uY2V9fSIsImN1cnJlbmN5IjoiRVRIIn0=", r.Header.Get("X-TXC-PAYLOAD"))
-		assert.Equal(t, "018092f426a985c45d8b0c027ea361ddd71e84324bb35d2f33533fc1548bae08", r.Header.Get("X-TXC-SIGNATURE"))
-
-		expectedReqBody := `{
-			"currency": "ETH",
-			"request": "{{request}}",
-			"nonce": "{{nonce}}"
-		}`
 		reqBody, _ := ioutil.ReadAll(r.Body)
-		equal, err := isEqualJSON(expectedReqBody, string(reqBody))
+		reqBody64 := base64.StdEncoding.EncodeToString(reqBody)
+
+		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
+		assert.Equal(t, reqBody64, r.Header.Get("X-TXC-PAYLOAD"))
+		assert.NotEmpty(t, r.Header.Get("X-TXC-SIGNATURE"))
+
+		var req AccountCurrencyBalanceRequest
+		err := json.Unmarshal(reqBody, &req)
 		assert.Nil(t, err, err)
-		assert.True(t, equal, fmt.Sprintf("%s is not equal to %s", expectedReqBody, string(reqBody)))
+		assert.Equal(t, req.Currency, "ETH")
+		assert.Equal(t, req.Request, "/api/v1/account/balance")
+		assert.NotEmpty(t, req.Nonce)
+
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(body))
 	}))
@@ -168,14 +156,10 @@ func TestPostCurrencyBalance(t *testing.T) {
 		t.Error(err.Error())
 	}
 	request := &AccountCurrencyBalanceRequest{
-		Request: Request{
-			Request: "{{request}}",
-			Nonce:   "{{nonce}}",
-		},
 		Currency: "ETH",
 	}
 	resp, err := client.PostCurrencyBalance(request)
-	assert.NotNil(t, resp, fmt.Sprintf("erro: %v", err))
+	assert.NotNil(t, resp, fmt.Sprintf("error: %v", err))
 	assert.Equal(t, true, resp.Success)
 
 	respBytes, _ := json.Marshal(resp)

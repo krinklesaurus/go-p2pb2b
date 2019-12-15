@@ -1,6 +1,7 @@
 package p2pb2b
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -37,25 +38,26 @@ func TestCreateOrder(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/order/new", r.URL.String())
+		assert.Equal(t, "/api/v1/order/new", r.URL.String())
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
-		assert.Equal(t, "eyJyZXF1ZXN0Ijoie3tyZXF1ZXN0fX0iLCJub25jZSI6Int7bm9uY2V9fSIsIm1hcmtldCI6IkVUSF9CVEMiLCJzaWRlIjoiYnV5IiwiYW1vdW50IjoiMC4wMDEiLCJwcmljZSI6IjEwMDAifQ==", r.Header.Get("X-TXC-PAYLOAD"))
-		assert.Equal(t, "b7cea8337772ecd0aa0af981037ea919b40645e8015becfdce36a3abdff6b440", r.Header.Get("X-TXC-SIGNATURE"))
-
-		expectedReqBody := `{
-			"market": "ETH_BTC",
-			"side": "buy",
-			"amount": "0.001",
-			"price": "1000",
-			"request": "{{request}}",
-			"nonce": "{{nonce}}"
-		}`
 		reqBody, _ := ioutil.ReadAll(r.Body)
-		equal, err := isEqualJSON(expectedReqBody, string(reqBody))
+		reqBody64 := base64.StdEncoding.EncodeToString(reqBody)
+
+		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
+		assert.Equal(t, reqBody64, r.Header.Get("X-TXC-PAYLOAD"))
+		assert.NotEmpty(t, r.Header.Get("X-TXC-SIGNATURE"))
+
+		var req CreateOrderRequest
+		err := json.Unmarshal(reqBody, &req)
+
 		assert.Nil(t, err, err)
-		assert.True(t, equal, fmt.Sprintf("%s is not equal to %s", expectedReqBody, string(reqBody)))
+		assert.Equal(t, "ETH_BTC", req.Market)
+		assert.Equal(t, "buy", req.Side)
+		assert.Equal(t, 0.001, req.Amount)
+		assert.Equal(t, float64(1000), req.Price)
+		assert.Equal(t, "/api/v1/order/new", req.Request)
+		assert.NotEmpty(t, req.Nonce)
 
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(body))
@@ -67,10 +69,6 @@ func TestCreateOrder(t *testing.T) {
 		t.Error(err.Error())
 	}
 	request := &CreateOrderRequest{
-		Request: Request{
-			Request: "{{request}}",
-			Nonce:   "{{nonce}}",
-		},
 		Market: "ETH_BTC",
 		Side:   "buy",
 		Amount: 0.001,
@@ -111,23 +109,24 @@ func TestCancelOrder(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/order/cancel", r.URL.String())
+		assert.Equal(t, "/api/v1/order/cancel", r.URL.String())
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
-		assert.Equal(t, "eyJyZXF1ZXN0Ijoie3tyZXF1ZXN0fX0iLCJub25jZSI6Int7bm9uY2V9fSIsIm1hcmtldCI6IkVUSF9CVEMiLCJvcmRlcklkIjoyNTc0OX0=", r.Header.Get("X-TXC-PAYLOAD"))
-		assert.Equal(t, "f8883be6c0bacaae8c3e3aa4d3fc914cb2ee9303ec46648df2a265cc317e1cdd", r.Header.Get("X-TXC-SIGNATURE"))
-
-		expectedReqBody := `{
-			"market": "ETH_BTC",
-			"orderId": 25749,
-			"request": "{{request}}",
-			"nonce": "{{nonce}}"
-		}`
 		reqBody, _ := ioutil.ReadAll(r.Body)
-		equal, err := isEqualJSON(expectedReqBody, string(reqBody))
+		reqBody64 := base64.StdEncoding.EncodeToString(reqBody)
+
+		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
+		assert.Equal(t, reqBody64, r.Header.Get("X-TXC-PAYLOAD"))
+		assert.NotEmpty(t, r.Header.Get("X-TXC-SIGNATURE"))
+
+		var req CancelOrderRequest
+		err := json.Unmarshal(reqBody, &req)
+
 		assert.Nil(t, err, err)
-		assert.True(t, equal, fmt.Sprintf("%s is not equal to %s", expectedReqBody, string(reqBody)))
+		assert.Equal(t, "ETH_BTC", req.Market)
+		assert.Equal(t, 25749, int(req.OrderID))
+		assert.Equal(t, req.Request, "/api/v1/order/cancel")
+		assert.NotEmpty(t, req.Nonce)
 
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(body))
@@ -139,10 +138,6 @@ func TestCancelOrder(t *testing.T) {
 		t.Error(err.Error())
 	}
 	request := &CancelOrderRequest{
-		Request: Request{
-			Request: "{{request}}",
-			Nonce:   "{{nonce}}",
-		},
 		Market:  "ETH_BTC",
 		OrderID: 25749,
 	}
@@ -189,24 +184,25 @@ func TestQueryUnexecuted(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/orders", r.URL.String())
+		assert.Equal(t, "/api/v1/orders", r.URL.String())
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
-		assert.Equal(t, "eyJyZXF1ZXN0Ijoie3tyZXF1ZXN0fX0iLCJub25jZSI6Int7bm9uY2V9fSIsIm1hcmtldCI6IkVUSF9CVEMiLCJvZmZzZXQiOjAsImxpbWl0IjoxMDB9", r.Header.Get("X-TXC-PAYLOAD"))
-		assert.Equal(t, "407a831bebf538cd01c179dd88117b9e5753986ba4e1f820afee16317d37a814", r.Header.Get("X-TXC-SIGNATURE"))
-
-		expectedReqBody := `{
-			"market": "ETH_BTC",
-			"offset": 0,
-			"limit": 100,
-			"request": "{{request}}",
-			"nonce": "{{nonce}}"
-		}`
 		reqBody, _ := ioutil.ReadAll(r.Body)
-		equal, err := isEqualJSON(expectedReqBody, string(reqBody))
+		reqBody64 := base64.StdEncoding.EncodeToString(reqBody)
+
+		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
+		assert.Equal(t, reqBody64, r.Header.Get("X-TXC-PAYLOAD"))
+		assert.NotEmpty(t, r.Header.Get("X-TXC-SIGNATURE"))
+
+		var req QueryUnexecutedRequest
+		err := json.Unmarshal(reqBody, &req)
+
 		assert.Nil(t, err, err)
-		assert.True(t, equal, fmt.Sprintf("%s is not equal to %s", expectedReqBody, string(reqBody)))
+		assert.Equal(t, "ETH_BTC", req.Market)
+		assert.Equal(t, int(0), req.Offset)
+		assert.Equal(t, int(100), req.Limit)
+		assert.Equal(t, "/api/v1/orders", req.Request)
+		assert.NotEmpty(t, req.Nonce)
 
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(body))
@@ -218,10 +214,6 @@ func TestQueryUnexecuted(t *testing.T) {
 		t.Error(err.Error())
 	}
 	request := &QueryUnexecutedRequest{
-		Request: Request{
-			Request: "{{request}}",
-			Nonce:   "{{nonce}}",
-		},
 		Market: "ETH_BTC",
 		Offset: 0,
 		Limit:  100,
@@ -285,23 +277,24 @@ func TestQueryExecuted(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/account/order_history", r.URL.String())
+		assert.Equal(t, "/api/v1/account/order_history", r.URL.String())
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
-		assert.Equal(t, "eyJyZXF1ZXN0Ijoie3tyZXF1ZXN0fX0iLCJub25jZSI6Int7bm9uY2V9fSIsIm9mZnNldCI6MCwibGltaXQiOjEwMH0=", r.Header.Get("X-TXC-PAYLOAD"))
-		assert.Equal(t, "260d4db5d0cd1f8139b90f3f14b624c050eb6496837681e7c41f2638f8d565dc", r.Header.Get("X-TXC-SIGNATURE"))
-
-		expectedReqBody := `{
-			"offset": 0,
-			"limit": 100,
-			"request": "{{request}}",
-			"nonce": "{{nonce}}"
-		}`
 		reqBody, _ := ioutil.ReadAll(r.Body)
-		equal, err := isEqualJSON(expectedReqBody, string(reqBody))
+		reqBody64 := base64.StdEncoding.EncodeToString(reqBody)
+
+		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
+		assert.Equal(t, reqBody64, r.Header.Get("X-TXC-PAYLOAD"))
+		assert.NotEmpty(t, r.Header.Get("X-TXC-SIGNATURE"))
+
+		var req QueryExecutedRequest
+		err := json.Unmarshal(reqBody, &req)
+
 		assert.Nil(t, err, err)
-		assert.True(t, equal, fmt.Sprintf("%s is not equal to %s", expectedReqBody, string(reqBody)))
+		assert.Equal(t, 0, req.Offset)
+		assert.Equal(t, 100, req.Limit)
+		assert.Equal(t, "/api/v1/account/order_history", req.Request)
+		assert.NotEmpty(t, req.Nonce)
 
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(body))
@@ -313,10 +306,6 @@ func TestQueryExecuted(t *testing.T) {
 		t.Error(err.Error())
 	}
 	request := &QueryExecutedRequest{
-		Request: Request{
-			Request: "{{request}}",
-			Nonce:   "{{nonce}}",
-		},
 		Offset: 0,
 		Limit:  100,
 	}
@@ -356,24 +345,25 @@ func TestQueryDeals(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "/account/order", r.URL.String())
+		assert.Equal(t, "/api/v1/account/order", r.URL.String())
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
-		assert.Equal(t, "eyJyZXF1ZXN0Ijoie3tyZXF1ZXN0fX0iLCJub25jZSI6Int7bm9uY2V9fSIsIm9yZGVySWQiOjEyMzQsIm9mZnNldCI6MTAsImxpbWl0IjoxMDB9", r.Header.Get("X-TXC-PAYLOAD"))
-		assert.Equal(t, "5fcc71442011d25e63749aff14995b8a539d9353c2ea12ae49e1fc77de49bb55", r.Header.Get("X-TXC-SIGNATURE"))
-
-		expectedReqBody := `{
-			"orderId": 1234,
-			"offset": 10,
-			"limit": 100,
-			"request": "{{request}}",
-			"nonce": "{{nonce}}"
-		}`
 		reqBody, _ := ioutil.ReadAll(r.Body)
-		equal, err := isEqualJSON(expectedReqBody, string(reqBody))
+		reqBody64 := base64.StdEncoding.EncodeToString(reqBody)
+
+		assert.Equal(t, pseudoAPIKey.String(), r.Header.Get("X-TXC-APIKEY"))
+		assert.Equal(t, reqBody64, r.Header.Get("X-TXC-PAYLOAD"))
+		assert.NotEmpty(t, r.Header.Get("X-TXC-SIGNATURE"))
+
+		var req QueryDealsRequest
+		err := json.Unmarshal(reqBody, &req)
+
 		assert.Nil(t, err, err)
-		assert.True(t, equal, fmt.Sprintf("%s is not equal to %s", expectedReqBody, string(reqBody)))
+		assert.Equal(t, 1234, req.OrderID)
+		assert.Equal(t, 10, req.Offset)
+		assert.Equal(t, 100, req.Limit)
+		assert.Equal(t, "/api/v1/account/order", req.Request)
+		assert.NotEmpty(t, req.Nonce)
 
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(body))
@@ -385,10 +375,6 @@ func TestQueryDeals(t *testing.T) {
 		t.Error(err.Error())
 	}
 	request := &QueryDealsRequest{
-		Request: Request{
-			Request: "{{request}}",
-			Nonce:   "{{nonce}}",
-		},
 		OrderID: 1234,
 		Offset:  10,
 		Limit:   100,

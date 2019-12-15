@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 type CreateOrderResp struct {
@@ -22,7 +23,7 @@ type Order struct {
 	Left      float64 `json:"left,string"`
 	MakerFee  float64 `json:"makerFee,string"`
 	Market    string  `json:"market"`
-	OrderID   int64   `json:"orderId"`
+	OrderID   int     `json:"orderId"`
 	Price     float64 `json:"price,string"`
 	Side      string  `json:"side"`
 	TakerFee  float64 `json:"takerFee,string"`
@@ -31,7 +32,7 @@ type Order struct {
 }
 
 type CreateOrderRequest struct {
-	Request
+	request
 	Market string  `json:"market"`
 	Side   string  `json:"side"`
 	Amount float64 `json:"amount,string"`
@@ -45,28 +46,28 @@ type CancelOrderResp struct {
 }
 
 type CancelOrderRequest struct {
-	Request
+	request
 	Market  string `json:"market"`
-	OrderID int64  `json:"orderId"`
+	OrderID int    `json:"orderId"`
 }
 
 type QueryUnexecutedRequest struct {
-	Request
+	request
 	Market string `json:"market"`
-	Offset int64  `json:"offset"`
-	Limit  int64  `json:"limit"`
+	Offset int    `json:"offset"`
+	Limit  int    `json:"limit"`
 }
 
 type QueryUnexecutedResp struct {
 	Success bool                  `json:"success"`
 	Message string                `json:"message"`
-	Result  QueryUnexecutedResult `json:"result"`
+	Result  QueryUnexecutedResult `json:"result,omitempty"`
 }
 
 type QueryUnexecutedResult struct {
-	Limit  int64             `json:"limit"`
-	Offset int64             `json:"offset"`
-	Total  int64             `json:"total"`
+	Limit  int               `json:"limit"`
+	Offset int               `json:"offset"`
+	Total  int               `json:"total"`
 	Result []UnexecutedOrder `json:"result"`
 }
 
@@ -78,7 +79,7 @@ type UnexecutedOrder struct {
 	Left      float64 `json:"left,string"`
 	MakerFee  float64 `json:"makerFee,string"`
 	Market    string  `json:"market"`
-	ID        int64   `json:"id"`
+	ID        int     `json:"id"`
 	Price     float64 `json:"price,string"`
 	Side      string  `json:"side"`
 	TakerFee  float64 `json:"takerFee,string"`
@@ -87,21 +88,21 @@ type UnexecutedOrder struct {
 }
 
 type QueryExecutedRequest struct {
-	Request
-	Offset int64 `json:"offset"`
-	Limit  int64 `json:"limit"`
+	request
+	Offset int `json:"offset"`
+	Limit  int `json:"limit"`
 }
 
 type QueryExecutedResp struct {
 	Response
-	Result map[string][]AltOrder `json:"result"`
+	Result map[string][]AltOrder `json:"result,omitempty"`
 }
 
 type AltOrder struct {
 	Amount     float64 `json:"amount,string"`
 	Price      float64 `json:"price,string"`
 	Type       string  `json:"type"`
-	ID         int64   `json:"id"`
+	ID         int     `json:"id"`
 	Source     string  `json:"source,omitempty"`
 	Side       string  `json:"side"`
 	Ctime      float64 `json:"ctime"`
@@ -116,20 +117,20 @@ type AltOrder struct {
 }
 
 type QueryDealsRequest struct {
-	Request
-	OrderID int64 `json:"orderId"`
-	Offset  int64 `json:"offset"`
-	Limit   int64 `json:"limit"`
+	request
+	OrderID int `json:"orderId"`
+	Offset  int `json:"offset"`
+	Limit   int `json:"limit"`
 }
 
 type QueryDealsResp struct {
 	Response
-	Result QueryDealsResult `json:"result"`
+	Result QueryDealsResult `json:"result,omitempty"`
 }
 
 type QueryDealsResult struct {
-	Offset  int64    `json:"offset"`
-	Limit   int64    `json:"limit"`
+	Offset  int      `json:"offset"`
+	Limit   int      `json:"limit"`
 	Records []Record `json:"records"`
 }
 
@@ -138,15 +139,20 @@ type Record struct {
 	Fee         float64 `json:"fee,string"`
 	Price       float64 `json:"price,string"`
 	Amount      float64 `json:"amount,string"`
-	ID          int64   `json:"id"`
-	DealOrderID int64   `json:"dealOrderId"`
-	Role        int64   `json:"role"`
+	ID          int     `json:"id"`
+	DealOrderID int     `json:"dealOrderId"`
+	Role        int     `json:"role"`
 	Deal        float64 `json:"deal,string"`
 }
 
-func (c *client) CreateOrder(request *CreateOrderRequest) (*CreateOrderResp, error) {
-	url := fmt.Sprintf("%s/order/new", c.url)
-	asJSON, err := json.Marshal(request)
+func (c *client) CreateOrder(req *CreateOrderRequest) (*CreateOrderResp, error) {
+	path := "/api/v1/order/new"
+	url := fmt.Sprintf("%s%s", c.url, path)
+	req.request = request{
+		Nonce:   time.Now().UnixNano(),
+		Request: path,
+	}
+	asJSON, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
@@ -172,9 +178,14 @@ func (c *client) CreateOrder(request *CreateOrderRequest) (*CreateOrderResp, err
 	return &result, nil
 }
 
-func (c *client) CancelOrder(request *CancelOrderRequest) (*CancelOrderResp, error) {
-	url := fmt.Sprintf("%s/order/cancel", c.url)
-	asJSON, err := json.Marshal(request)
+func (c *client) CancelOrder(req *CancelOrderRequest) (*CancelOrderResp, error) {
+	path := "/api/v1/order/cancel"
+	url := fmt.Sprintf("%s%s", c.url, path)
+	req.request = request{
+		Nonce:   time.Now().UnixNano(),
+		Request: path,
+	}
+	asJSON, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
@@ -200,9 +211,14 @@ func (c *client) CancelOrder(request *CancelOrderRequest) (*CancelOrderResp, err
 	return &result, nil
 }
 
-func (c *client) QueryUnexecuted(request *QueryUnexecutedRequest) (*QueryUnexecutedResp, error) {
-	url := fmt.Sprintf("%s/orders", c.url)
-	asJSON, err := json.Marshal(request)
+func (c *client) QueryUnexecuted(req *QueryUnexecutedRequest) (*QueryUnexecutedResp, error) {
+	path := "/api/v1/orders"
+	url := fmt.Sprintf("%s%s", c.url, path)
+	req.request = request{
+		Nonce:   time.Now().UnixNano(),
+		Request: path,
+	}
+	asJSON, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
@@ -210,12 +226,13 @@ func (c *client) QueryUnexecuted(request *QueryUnexecutedRequest) (*QueryUnexecu
 	if err != nil {
 		return nil, err
 	}
-	err = checkHTTPStatus(*resp, http.StatusOK)
+
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	err = checkHTTPStatus(*resp, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -228,9 +245,14 @@ func (c *client) QueryUnexecuted(request *QueryUnexecutedRequest) (*QueryUnexecu
 	return &result, nil
 }
 
-func (c *client) QueryExecuted(request *QueryExecutedRequest) (*QueryExecutedResp, error) {
-	url := fmt.Sprintf("%s/account/order_history", c.url)
-	asJSON, err := json.Marshal(request)
+func (c *client) QueryExecuted(req *QueryExecutedRequest) (*QueryExecutedResp, error) {
+	path := "/api/v1/account/order_history"
+	url := fmt.Sprintf("%s%s", c.url, path)
+	req.request = request{
+		Nonce:   time.Now().UnixNano(),
+		Request: path,
+	}
+	asJSON, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
@@ -238,6 +260,7 @@ func (c *client) QueryExecuted(request *QueryExecutedRequest) (*QueryExecutedRes
 	if err != nil {
 		return nil, err
 	}
+
 	err = checkHTTPStatus(*resp, http.StatusOK)
 	if err != nil {
 		return nil, err
@@ -256,9 +279,14 @@ func (c *client) QueryExecuted(request *QueryExecutedRequest) (*QueryExecutedRes
 	return &result, nil
 }
 
-func (c *client) QueryDeals(request *QueryDealsRequest) (*QueryDealsResp, error) {
-	url := fmt.Sprintf("%s/account/order", c.url)
-	asJSON, err := json.Marshal(request)
+func (c *client) QueryDeals(req *QueryDealsRequest) (*QueryDealsResp, error) {
+	path := "/api/v1/account/order"
+	url := fmt.Sprintf("%s%s", c.url, path)
+	req.request = request{
+		Nonce:   time.Now().UnixNano(),
+		Request: path,
+	}
+	asJSON, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
@@ -266,6 +294,7 @@ func (c *client) QueryDeals(request *QueryDealsRequest) (*QueryDealsResp, error)
 	if err != nil {
 		return nil, err
 	}
+
 	err = checkHTTPStatus(*resp, http.StatusOK)
 	if err != nil {
 		return nil, err
